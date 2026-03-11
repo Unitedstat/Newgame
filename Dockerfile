@@ -1,28 +1,31 @@
 # ===== Build Stage =====
-FROM maven:3.9.9-eclipse-temurin-17 AS build
+FROM maven:3.9.9-eclipse-temurin-21 AS build
+
 WORKDIR /app
-# rrr
-# Copy pom.xml first to leverage Docker layer caching
+
+# Copy pom.xml first (Docker layer caching)
 COPY pom.xml .
 
-# Pre-download dependencies (faster rebuilds)
+# Download dependencies first
 RUN mvn -B -q -DskipTests dependency:go-offline
 
-# Copy project source
+# Copy source code
 COPY src ./src
 
-# Build the JAR (skip tests for faster build)
+# Build the JAR
 RUN mvn clean package -DskipTests
 
+
 # ===== Runtime Stage =====
-FROM eclipse-temurin:17-jre-alpine
+FROM eclipse-temurin:21-jre-alpine
+
 WORKDIR /app
 
-# Copy built jar from build stage
+# Copy jar from build stage
 COPY --from=build /app/target/*.jar app.jar
 
-# Expose app port
+# Expose application port
 EXPOSE 8080
 
-# Run the app
-ENTRYPOINT ["java", "-jar", "app.jar"]
+# Run the application
+ENTRYPOINT ["java","-jar","app.jar"]
