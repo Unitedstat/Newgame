@@ -2,37 +2,30 @@ package com.javaproject.security;
 
 import javax.sql.DataSource;
 
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.authentication.builders.AuthenticationManagerBuilder;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
-import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configuration.WebSecurityConfigurerAdapter;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.provisioning.JdbcUserDetailsManager;
+import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
-@EnableWebSecurity
-public class SecurityConfig extends WebSecurityConfigurerAdapter {
+public class SecurityConfig {
 
-    @Autowired
-    private LoggingAccessDeniedHandler accessDeniedHandler;
+    private final DataSource dataSource;
+    private final LoggingAccessDeniedHandler accessDeniedHandler;
 
-    @Autowired
-    private DataSource dataSource;
+    public SecurityConfig(DataSource dataSource,
+                          LoggingAccessDeniedHandler accessDeniedHandler) {
+        this.dataSource = dataSource;
+        this.accessDeniedHandler = accessDeniedHandler;
+    }
 
-    /**
-     * Password encoder bean
-     */
     @Bean
     public BCryptPasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    /**
-     * JdbcUserDetailsManager bean used in HomeController
-     */
     @Bean
     public JdbcUserDetailsManager jdbcUserDetailsManager() {
         JdbcUserDetailsManager manager = new JdbcUserDetailsManager();
@@ -40,50 +33,32 @@ public class SecurityConfig extends WebSecurityConfigurerAdapter {
         return manager;
     }
 
-    /**
-     * Authorization configuration
-     */
-    @Override
-    protected void configure(HttpSecurity http) throws Exception {
+    @Bean
+    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
 
-        http.authorizeRequests()
-                .antMatchers("/user/**").hasAnyRole("USER", "MANAGER")
-                .antMatchers("/secured/**").hasAnyRole("USER", "MANAGER")
-                .antMatchers("/manager/**").hasRole("MANAGER")
-                .antMatchers("/h2-console/**").permitAll()
-                .antMatchers("/", "/**").permitAll()
-                .and()
-                .formLogin()
+        http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/user/**").hasAnyRole("USER","MANAGER")
+                .requestMatchers("/secured/**").hasAnyRole("USER","MANAGER")
+                .requestMatchers("/manager/**").hasRole("MANAGER")
+                .requestMatchers("/h2-console/**").permitAll()
+                .requestMatchers("/", "/**").permitAll()
+            )
+            .formLogin(login -> login
                 .loginPage("/login")
                 .defaultSuccessUrl("/secured")
-                .and()
-                .logout()
+            )
+            .logout(logout -> logout
                 .invalidateHttpSession(true)
                 .clearAuthentication(true)
-                .and()
-                .exceptionHandling()
-                .accessDeniedHandler(accessDeniedHandler);
+            )
+            .exceptionHandling(ex -> ex
+                .accessDeniedHandler(accessDeniedHandler)
+            );
 
-        http.csrf().disable();
-        http.headers().frameOptions().disable();
-    }
+        http.csrf(csrf -> csrf.disable());
+        http.headers(headers -> headers.frameOptions(frame -> frame.disable()));
 
-    /**
-     * Authentication configuration
-     */
-    @Override
-    protected void configure(AuthenticationManagerBuilder auth) throws Exception {
-
-        auth.jdbcAuthentication()
-                .dataSource(dataSource)
-                .withDefaultSchema()
-                .passwordEncoder(passwordEncoder())
-                .withUser("bugs")
-                .password(passwordEncoder().encode("bunny"))
-                .roles("USER")
-                .and()
-                .withUser("daffy")
-                .password(passwordEncoder().encode("duck"))
-                .roles("USER", "MANAGER");
+        return http.build();
     }
 }
